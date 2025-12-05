@@ -1,0 +1,180 @@
+name: Flutter CI
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - "**"
+
+permissions:
+  contents: read
+
+env:
+  CI: true
+  FLUTTER_DISABLE_ANALYTICS: true
+  DISPLAY: ":99"
+
+jobs:
+  analyze-and-test:
+    name: Analyze, Unit and Widget Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: preference_frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          # Note: version left to default 'latest stable' to match project; pin if needed.
+
+      - name: Flutter doctor
+        run: flutter doctor -v
+
+      - name: Cache Pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ~/.pana-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Cache Flutter build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.flutter-devtools
+            ~/.dartServer/.analysis-driver/
+            preference_frontend/.dart_tool
+            preference_frontend/build
+          key: ${{ runner.os }}-flutter-build-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-flutter-build-
+
+      - name: Flutter analyze
+        run: flutter analyze
+
+      - name: Run unit and widget tests (expanded)
+        run: |
+          mkdir -p ../test_reports
+          # Expanded reporter with verbose logs
+          flutter test --reporter=expanded -v | tee ../test_reports/unit_widget_tests.log
+        continue-on-error: false
+
+      - name: Upload unit/widget test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-widget-tests-logs
+          path: test_reports/unit_widget_tests.log
+
+  integration-tests-linux:
+    name: Linux Desktop Integration Tests (Xvfb)
+    runs-on: ubuntu-latest
+    needs: analyze-and-test
+    defaults:
+      run:
+        working-directory: preference_frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt-get update
+          # Dependencies commonly needed for Flutter Linux desktop builds and tests
+          sudo apt-get install -y \
+            libgtk-3-0 \
+            libgtk-3-dev \
+            clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
+            xvfb xauth
+
+      - name: Enable Linux desktop
+        run: flutter config --enable-linux-desktop
+
+      - name: Flutter doctor
+        run: flutter doctor -v
+
+      - name: Cache Pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ~/.pana-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Cache Flutter build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.flutter-devtools
+            ~/.dartServer/.analysis-driver/
+            preference_frontend/.dart_tool
+            preference_frontend/build
+          key: ${{ runner.os }}-flutter-build-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-flutter-build-
+
+      - name: List integration tests
+        id: list_tests
+        run: |
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          ls -1 integration_test/*.dart || true >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Start Xvfb
+        run: |
+          # Start Xvfb for headless Linux GUI tests
+          /usr/bin/Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
+          echo "Xvfb started on DISPLAY=$DISPLAY"
+
+      - name: Run integration tests one by one
+        if: ${{ steps.list_tests.outputs.files != '' }}
+        shell: bash
+        run: |
+          mkdir -p ../test_reports/integration
+          set -e
+          failed=0
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            name="$(basename "$file" .dart)"
+            log="../test_reports/integration/${name}.log"
+            echo "Running integration test: $file"
+            # Use linux device target
+            if ! flutter test "$file" -d linux --reporter=expanded -v | tee "$log"; then
+              echo "Integration test failed: $file"
+              failed=1
+            fi
+          done <<< "${{ steps.list_tests.outputs.files }}"
+          exit $failed
+
+      - name: Upload integration test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-tests-logs
+          path: test_reports/integration/*.log
+
+      - name: No integration tests found note
+        if: ${{ steps.list_tests.outputs.files == '' }}
+        run: echo "No integration tests found in integration_test/; skipping."

@@ -1,19 +1,55 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show timeDilation;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 import 'package:preference_frontend/main.dart';
 
-// This suite expands coverage of realistic end-to-end flows that are safe offline.
-// We avoid any networking and focus on navigating simple routes, verifying primary
-// widgets, and ensuring basic interactions do not crash the app.
+/// Controlled-wait helpers for integration tests.
+///
+/// Why not pumpAndSettle?
+/// - In real apps, animations/timers or non-quiescent states can keep the
+///   frame scheduler active, causing pumpAndSettle to time out intermittently.
+/// - These helpers use short, incremental pumps with a max timeout, waiting
+///   only for specific UI conditions (a Finder to appear/disappear).
+///
+/// Usage strategy:
+/// - Prefer waiting for target widgets by Key/Text or Type, instead of global
+///   quiescence.
+/// - Keep tests deterministic and offline.
+Future<void> _pumpUntil(WidgetTester tester, bool Function() condition,
+    {Duration timeout = const Duration(seconds: 8),
+    Duration step = const Duration(milliseconds: 100)}) async {
+  final end = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(end)) {
+    if (condition()) return;
+    await tester.pump(step);
+  }
+  // One last check so that fast-resolving conditions don't fail on boundary.
+  if (!condition()) {
+    throw TestFailure('Condition not met within ${timeout.inMilliseconds}ms');
+  }
+}
+
+Future<void> _waitForFinder(WidgetTester tester, Finder finder,
+    {Duration timeout = const Duration(seconds: 8),
+    Duration step = const Duration(milliseconds: 100)}) async {
+  await _pumpUntil(tester, () => tester.any(finder),
+      timeout: timeout, step: step);
+}
+
 void main() {
-  // Initialize the integration test binding to run with real engine frames.
+  // Ensure integration binding is used.
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  // Keep animations at normal speed and avoid excessively slow motion in CI.
+  setUpAll(() {
+    timeDilation = 1.0;
+  });
 
   group('E2E - Main flows and navigation', () {
     testWidgets('MaterialApp routes: start on / then navigate to /home (same screen)', (WidgetTester tester) async {
-      // Create a basic routes table that maps to the same MyHomePage for navigation verification.
+      // Build with routes mapping to the same MyHomePage for deterministic checks.
       await tester.pumpWidget(
         MaterialApp(
           title: 'AI Build Tool',
@@ -24,20 +60,16 @@ void main() {
         ),
       );
 
-      await tester.pumpAndSettle();
+      // Wait explicitly for expected content instead of global settle.
+      await _waitForFinder(tester, find.byType(MyHomePage));
 
       // Initial route should render MyHomePage
       expect(find.byType(MyHomePage), findsOneWidget);
       expect(find.text('preference_frontend'), findsOneWidget);
-      expect(find.text('preference_frontend App is being generated...'), findsOneWidget);
+      await _waitForFinder(tester, find.text('preference_frontend App is being generated...'));
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-      // Navigate to '/home' and ensure UI remains consistent
-      // Use Navigator to pushNamed - wrap call inside runAsync to avoid "context across async gap"
-      await tester.runAsync(() async {
-        // We cannot access BuildContext directly here. Instead, rebuild with initialRoute to simulate navigation.
-      });
-
+      // Simulate navigation deterministically by rebuilding with initialRoute '/home'.
       await tester.pumpWidget(
         MaterialApp(
           title: 'AI Build Tool',
@@ -49,18 +81,18 @@ void main() {
         ),
       );
 
-      await tester.pumpAndSettle();
+      await _waitForFinder(tester, find.byType(MyHomePage));
 
       // Verify again after "navigation"
       expect(find.byType(MyHomePage), findsOneWidget);
       expect(find.text('preference_frontend'), findsOneWidget);
-      expect(find.text('preference_frontend App is being generated...'), findsOneWidget);
+      await _waitForFinder(tester, find.text('preference_frontend App is being generated...'));
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
 
     testWidgets('AppBar presence, title text, and theme structure remain stable on rebuild', (WidgetTester tester) async {
       await tester.pumpWidget(const MyApp());
-      await tester.pumpAndSettle();
+      await _waitForFinder(tester, find.byType(Scaffold));
 
       // Structural checks
       expect(find.byType(MaterialApp), findsOneWidget);
@@ -80,29 +112,31 @@ void main() {
 
     testWidgets('User interactions: tap title, drag body, ensure no errors and UI intact', (WidgetTester tester) async {
       await tester.pumpWidget(const MyApp());
-      await tester.pumpAndSettle();
+      await _waitForFinder(tester, find.byType(Scaffold));
 
       // Tap on the title text in the AppBar
       final titleFinder = find.text('preference_frontend');
       expect(titleFinder, findsOneWidget);
       await tester.tap(titleFinder);
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
 
       // Drag gesture on Scaffold to simulate user scroll/drag
       await tester.drag(find.byType(Scaffold), const Offset(0, -100));
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
 
       // UI remains consistent
-      expect(find.text('preference_frontend App is being generated...'), findsOneWidget);
+      await _waitForFinder(tester, find.text('preference_frontend App is being generated...'));
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
 
     testWidgets('Loading/empty state verification: text and loader exist and are unique', (WidgetTester tester) async {
       await tester.pumpWidget(const MyApp());
-      await tester.pumpAndSettle();
+      await _waitForFinder(tester, find.byType(Scaffold));
 
       final messageFinder = find.text('preference_frontend App is being generated...');
       final loaderFinder = find.byType(CircularProgressIndicator);
+
+      await _waitForFinder(tester, messageFinder);
 
       expect(messageFinder, findsOneWidget);
       expect(loaderFinder, findsOneWidget);
@@ -130,7 +164,7 @@ void main() {
         ),
       );
 
-      await tester.pumpAndSettle();
+      await _waitForFinder(tester, find.byType(MyHomePage));
 
       // Initial screen checks
       expect(find.byType(MyHomePage), findsOneWidget);
@@ -151,7 +185,7 @@ void main() {
           initialRoute: '/next',
         ),
       );
-      await tester.pumpAndSettle();
+      await _waitForFinder(tester, find.text('Next Page'));
 
       // On next page
       expect(find.text('Next Page'), findsOneWidget);
@@ -173,12 +207,12 @@ void main() {
           initialRoute: '/',
         ),
       );
-      await tester.pumpAndSettle();
+      await _waitForFinder(tester, find.byType(MyHomePage));
 
       // Back on home
       expect(find.byType(MyHomePage), findsOneWidget);
       expect(find.text('preference_frontend'), findsOneWidget);
-      expect(find.text('preference_frontend App is being generated...'), findsOneWidget);
+      await _waitForFinder(tester, find.text('preference_frontend App is being generated...'));
     });
   });
 }

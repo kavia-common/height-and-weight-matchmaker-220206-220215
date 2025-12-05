@@ -173,75 +173,97 @@ void main() {
       await _pumpEndOfFrame(tester);
     });
 
-    testWidgets('Route swap: switch to a dummy next page and back to home', (WidgetTester tester) async {
-      // Create a simple navigation app with two routes.
-      await tester.pumpWidget(
-        MaterialApp(
-          routes: {
-            '/': (context) => const MyHomePage(title: 'preference_frontend'),
-            '/next': (context) => Scaffold(
-                  appBar: AppBar(
-                    title: const Text('Next Page'),
+    testWidgets(
+      'Route swap: switch to a dummy next page and back to home',
+      (WidgetTester tester) async {
+        // Create a simple navigation app with two routes.
+        debugPrint('[Route swap] Building initial app at "/"');
+        await tester.pumpWidget(
+          MaterialApp(
+            routes: {
+              '/': (context) => const MyHomePage(title: 'preference_frontend'),
+              '/next': (context) => Scaffold(
+                    appBar: AppBar(
+                      title: const Text('Next Page'),
+                    ),
+                    body: const Center(child: Text('Next Page Body')),
                   ),
-                  body: const Center(child: Text('Next Page Body')),
-                ),
-          },
-          initialRoute: '/',
-        ),
-      );
+            },
+            initialRoute: '/',
+          ),
+        );
 
-      await _waitForFinder(tester, find.byType(MyHomePage));
+        // Initial deterministic settle to render first frame and reactive effects.
+        await tester.pump();
+        await tester.pumpAndSettle(const Duration(seconds: 10));
 
-      // Initial screen checks
-      expect(find.byType(MyHomePage), findsOneWidget);
-      expect(find.text('preference_frontend'), findsOneWidget);
+        // Initial screen checks with unique finders on the home screen.
+        final homeTypeFinder = find.byType(MyHomePage);
+        final homeTitleFinder = find.text('preference_frontend');
+        final homeLoadingTextFinder =
+            find.text('preference_frontend App is being generated...');
 
-      // "Navigate" to next by rebuilding with initialRoute set to '/next' (deterministic and offline)
-      await tester.pumpWidget(
-        MaterialApp(
-          routes: {
-            '/': (context) => const MyHomePage(title: 'preference_frontend'),
-            '/next': (context) => Scaffold(
-                  appBar: AppBar(
-                    title: const Text('Next Page'),
+        expect(homeTypeFinder, findsOneWidget);
+        expect(homeTitleFinder, findsOneWidget);
+        expect(homeLoadingTextFinder, findsOneWidget);
+
+        // "Navigate" to next by rebuilding with initialRoute set to '/next' (deterministic and offline)
+        debugPrint('[Route swap] Rebuilding app with initialRoute "/next"');
+        await tester.pumpWidget(
+          MaterialApp(
+            routes: {
+              '/': (context) => const MyHomePage(title: 'preference_frontend'),
+              '/next': (context) => Scaffold(
+                    appBar: AppBar(
+                      title: const Text('Next Page'),
+                    ),
+                    body: const Center(child: Text('Next Page Body')),
                   ),
-                  body: const Center(child: Text('Next Page Body')),
-                ),
-          },
-          initialRoute: '/next',
-        ),
-      );
-      await _pumpEndOfFrame(tester);
-      await _waitForFinder(tester, find.text('Next Page'));
+            },
+            initialRoute: '/next',
+          ),
+        );
 
-      // On next page
-      expect(find.text('Next Page'), findsOneWidget);
-      expect(find.text('Next Page Body'), findsOneWidget);
-      expect(find.byType(AppBar), findsOneWidget);
+        // Give the framework time to process and fully settle on the next route.
+        await tester.pump();
+        await tester.pumpAndSettle(const Duration(seconds: 10));
 
-      // "Navigate" back by rebuilding with initialRoute '/'
-      await tester.pumpWidget(
-        MaterialApp(
-          routes: {
-            '/': (context) => const MyHomePage(title: 'preference_frontend'),
-            '/next': (context) => Scaffold(
-                  appBar: AppBar(
-                    title: const Text('Next Page'),
+        // Unique finders for the target route.
+        final nextAppBarTitleFinder = find.text('Next Page');
+        final nextBodyFinder = find.text('Next Page Body');
+
+        debugPrint('[Route swap] Verifying next page is visible');
+        expect(nextAppBarTitleFinder, findsOneWidget);
+        expect(nextBodyFinder, findsOneWidget);
+        expect(find.byType(AppBar), findsOneWidget);
+
+        // "Navigate" back by rebuilding with initialRoute '/'
+        debugPrint('[Route swap] Rebuilding app with initialRoute "/"');
+        await tester.pumpWidget(
+          MaterialApp(
+            routes: {
+              '/': (context) => const MyHomePage(title: 'preference_frontend'),
+              '/next': (context) => Scaffold(
+                    appBar: AppBar(
+                      title: const Text('Next Page'),
+                    ),
+                    body: const Center(child: Text('Next Page Body')),
                   ),
-                  body: const Center(child: Text('Next Page Body')),
-                ),
-          },
-          initialRoute: '/',
-        ),
-      );
-      await _pumpEndOfFrame(tester);
-      await _waitForFinder(tester, find.byType(MyHomePage));
+            },
+            initialRoute: '/',
+          ),
+        );
 
-      // Back on home
-      expect(find.byType(MyHomePage), findsOneWidget);
-      expect(find.text('preference_frontend'), findsOneWidget);
-      await _waitForFinder(tester, find.text('preference_frontend App is being generated...'));
-      await _pumpEndOfFrame(tester);
-    });
+        // Allow for route change and settle on the home view again.
+        await tester.pump();
+        await tester.pumpAndSettle(const Duration(seconds: 10));
+
+        debugPrint('[Route swap] Verifying home page is visible again');
+        expect(homeTypeFinder, findsOneWidget);
+        expect(homeTitleFinder, findsOneWidget);
+        expect(homeLoadingTextFinder, findsOneWidget);
+      },
+      timeout: const Timeout(Duration(seconds: 30)),
+    );
   });
 }

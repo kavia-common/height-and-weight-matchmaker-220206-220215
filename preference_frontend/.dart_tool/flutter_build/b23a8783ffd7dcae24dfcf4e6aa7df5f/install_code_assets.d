@@ -1,0 +1,1 @@
+ /home/kavia/workspace/code-generation/height-and-weight-matchmaker-220206-220215/preference_frontend/.dart_tool/flutter_build/b23a8783ffd7dcae24dfcf4e6aa7df5f/native_assets.json: 

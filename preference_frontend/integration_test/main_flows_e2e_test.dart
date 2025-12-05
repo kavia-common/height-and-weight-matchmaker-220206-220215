@@ -174,19 +174,20 @@ void main() {
     });
 
     testWidgets(
-      'Route swap: switch to a dummy next page and back to home',
+      'Route swap: push to /next and then pop back to home',
       (WidgetTester tester) async {
-        // Build the app with two routes and render initial "/".
+        // Build a minimal app with named routes and render initial "/".
         debugPrint('[Route swap] Building initial app at "/"');
         await tester.pumpWidget(
           MaterialApp(
             routes: {
               '/': (context) => const MyHomePage(title: 'preference_frontend'),
               '/next': (context) => Scaffold(
+                    key: const Key('next-page'),
                     appBar: AppBar(
                       title: const Text('Next Page'),
                     ),
-                    body: const Center(child: Text('Next Page Body')),
+                    body: const Center(child: Text('Next Page')),
                   ),
             },
             initialRoute: '/',
@@ -200,69 +201,59 @@ void main() {
           await tester.idle();
         }
 
-        // Unique, reliable finders for current and next routes.
+        // Reliable finders for the home route.
         final homeTypeFinder = find.byType(MyHomePage);
         final homeTitleFinder = find.text('preference_frontend');
         final homeLoadingTextFinder =
             find.text('preference_frontend App is being generated...');
 
-        // Verify initial screen
+        // Verify initial screen is home.
         expect(homeTypeFinder, findsOneWidget);
         expect(homeTitleFinder, findsOneWidget);
-        await _waitForFinder(tester, homeLoadingTextFinder, timeout: const Duration(seconds: 30));
-
-        // "Navigate" to next by rebuilding with initialRoute set to '/next' (deterministic).
-        debugPrint('[Route swap] Rebuilding app with initialRoute "/next"');
-        await tester.pumpWidget(
-          MaterialApp(
-            routes: {
-              '/': (context) => const MyHomePage(title: 'preference_frontend'),
-              '/next': (context) => Scaffold(
-                    appBar: AppBar(
-                      title: const Text('Next Page'),
-                    ),
-                    body: const Center(child: Text('Next Page Body')),
-                  ),
-            },
-            initialRoute: '/next',
-          ),
+        await _waitForFinder(
+          tester,
+          homeLoadingTextFinder,
+          timeout: const Duration(seconds: 30),
         );
 
-        // Robust settle for next route.
+        // Use explicit navigation via Navigator.pushNamed to '/next'.
+        debugPrint('[Route swap] Navigating to "/next" with pushNamed');
+        await tester.runAsync(() async {
+          // No BuildContext preserved across await; call through tester first.
+          final navigator = Navigator.of(
+            tester.element(find.byType(Navigator)),
+          );
+          navigator.pushNamed('/next');
+        });
+
+        // Settle for next route with capped loop.
         await tester.idle();
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 20; i++) {
           await tester.pump(const Duration(milliseconds: 50));
           await tester.idle();
         }
 
+        // Verify next page by key and text.
+        final nextPageKeyFinder = find.byKey(const Key('next-page'));
         final nextAppBarTitleFinder = find.text('Next Page');
-        final nextBodyFinder = find.text('Next Page Body');
 
         debugPrint('[Route swap] Verifying next page is visible');
-        expect(nextAppBarTitleFinder, findsOneWidget);
-        expect(nextBodyFinder, findsOneWidget);
+        expect(nextPageKeyFinder, findsOneWidget);
+        expect(nextAppBarTitleFinder, findsWidgets); // AppBar title and body text
         expect(find.byType(AppBar), findsOneWidget);
 
-        // "Navigate" back by rebuilding with initialRoute '/'
-        debugPrint('[Route swap] Rebuilding app with initialRoute "/"');
-        await tester.pumpWidget(
-          MaterialApp(
-            routes: {
-              '/': (context) => const MyHomePage(title: 'preference_frontend'),
-              '/next': (context) => Scaffold(
-                    appBar: AppBar(
-                      title: const Text('Next Page'),
-                    ),
-                    body: const Center(child: Text('Next Page Body')),
-                  ),
-            },
-            initialRoute: '/',
-          ),
-        );
+        // Navigate back using Navigator.pop.
+        debugPrint('[Route swap] Popping back to home');
+        await tester.runAsync(() async {
+          final navigator = Navigator.of(
+            tester.element(find.byType(Navigator)),
+          );
+          navigator.pop();
+        });
 
         // Robust settle for home route again.
         await tester.idle();
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 20; i++) {
           await tester.pump(const Duration(milliseconds: 50));
           await tester.idle();
         }
@@ -270,10 +261,15 @@ void main() {
         debugPrint('[Route swap] Verifying home page is visible again');
         expect(homeTypeFinder, findsOneWidget);
         expect(homeTitleFinder, findsOneWidget);
-        await _waitForFinder(tester, homeLoadingTextFinder, timeout: const Duration(seconds: 30));
+        await _waitForFinder(
+          tester,
+          homeLoadingTextFinder,
+          timeout: const Duration(seconds: 30),
+        );
 
-        // Final cleanup to ensure no pending frames before test ends.
+        // Final cleanup to avoid pending frame assertions.
         await tester.idle();
+        await tester.pump();
         await tester.pump(const Duration(milliseconds: 16));
       },
       timeout: const Timeout(Duration(seconds: 90)),

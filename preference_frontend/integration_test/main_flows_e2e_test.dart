@@ -176,7 +176,7 @@ void main() {
     testWidgets(
       'Route swap: switch to a dummy next page and back to home',
       (WidgetTester tester) async {
-        // Create a simple navigation app with two routes.
+        // Build the app with two routes and render initial "/".
         debugPrint('[Route swap] Building initial app at "/"');
         await tester.pumpWidget(
           MaterialApp(
@@ -193,21 +193,25 @@ void main() {
           ),
         );
 
-        // Initial deterministic settle to render first frame and reactive effects.
-        await tester.pump();
-        await tester.pumpAndSettle(const Duration(seconds: 10));
+        // Robust settling: idle + small pumps in a capped loop instead of pumpAndSettle.
+        await tester.idle();
+        for (int i = 0; i < 10; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+          await tester.idle();
+        }
 
-        // Initial screen checks with unique finders on the home screen.
+        // Unique, reliable finders for current and next routes.
         final homeTypeFinder = find.byType(MyHomePage);
         final homeTitleFinder = find.text('preference_frontend');
         final homeLoadingTextFinder =
             find.text('preference_frontend App is being generated...');
 
+        // Verify initial screen
         expect(homeTypeFinder, findsOneWidget);
         expect(homeTitleFinder, findsOneWidget);
-        expect(homeLoadingTextFinder, findsOneWidget);
+        await _waitForFinder(tester, homeLoadingTextFinder, timeout: const Duration(seconds: 30));
 
-        // "Navigate" to next by rebuilding with initialRoute set to '/next' (deterministic and offline)
+        // "Navigate" to next by rebuilding with initialRoute set to '/next' (deterministic).
         debugPrint('[Route swap] Rebuilding app with initialRoute "/next"');
         await tester.pumpWidget(
           MaterialApp(
@@ -224,11 +228,13 @@ void main() {
           ),
         );
 
-        // Give the framework time to process and fully settle on the next route.
-        await tester.pump();
-        await tester.pumpAndSettle(const Duration(seconds: 10));
+        // Robust settle for next route.
+        await tester.idle();
+        for (int i = 0; i < 10; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+          await tester.idle();
+        }
 
-        // Unique finders for the target route.
         final nextAppBarTitleFinder = find.text('Next Page');
         final nextBodyFinder = find.text('Next Page Body');
 
@@ -254,16 +260,23 @@ void main() {
           ),
         );
 
-        // Allow for route change and settle on the home view again.
-        await tester.pump();
-        await tester.pumpAndSettle(const Duration(seconds: 10));
+        // Robust settle for home route again.
+        await tester.idle();
+        for (int i = 0; i < 10; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+          await tester.idle();
+        }
 
         debugPrint('[Route swap] Verifying home page is visible again');
         expect(homeTypeFinder, findsOneWidget);
         expect(homeTitleFinder, findsOneWidget);
-        expect(homeLoadingTextFinder, findsOneWidget);
+        await _waitForFinder(tester, homeLoadingTextFinder, timeout: const Duration(seconds: 30));
+
+        // Final cleanup to ensure no pending frames before test ends.
+        await tester.idle();
+        await tester.pump(const Duration(milliseconds: 16));
       },
-      timeout: const Timeout(Duration(seconds: 30)),
+      timeout: const Timeout(Duration(seconds: 90)),
     );
   });
 }

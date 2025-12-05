@@ -106,6 +106,10 @@ plugin_platform_interface
 3.0
 file:///home/kavia/.pub-cache/hosted/pub.dev/plugin_platform_interface-2.1.8/
 file:///home/kavia/.pub-cache/hosted/pub.dev/plugin_platform_interface-2.1.8/lib/
+process
+3.3
+file:///home/kavia/.pub-cache/hosted/pub.dev/process-5.0.3/
+file:///home/kavia/.pub-cache/hosted/pub.dev/process-5.0.3/lib/
 provider
 2.12
 file:///home/kavia/.pub-cache/hosted/pub.dev/provider-6.1.5+1/
@@ -174,6 +178,10 @@ string_scanner
 3.1
 file:///home/kavia/.pub-cache/hosted/pub.dev/string_scanner-1.4.1/
 file:///home/kavia/.pub-cache/hosted/pub.dev/string_scanner-1.4.1/lib/
+sync_http
+2.12
+file:///home/kavia/.pub-cache/hosted/pub.dev/sync_http-0.3.1/
+file:///home/kavia/.pub-cache/hosted/pub.dev/sync_http-0.3.1/lib/
 synchronized
 3.7
 file:///home/kavia/.pub-cache/hosted/pub.dev/synchronized-3.3.1/
@@ -198,6 +206,10 @@ web
 3.4
 file:///home/kavia/.pub-cache/hosted/pub.dev/web-1.1.1/
 file:///home/kavia/.pub-cache/hosted/pub.dev/web-1.1.1/lib/
+webdriver
+3.1
+file:///home/kavia/.pub-cache/hosted/pub.dev/webdriver-3.0.4/
+file:///home/kavia/.pub-cache/hosted/pub.dev/webdriver-3.0.4/lib/
 xdg_directories
 3.3
 file:///home/kavia/.pub-cache/hosted/pub.dev/xdg_directories-1.1.0/
@@ -214,6 +226,10 @@ flutter
 3.7
 file:///opt/flutter/packages/flutter/
 file:///opt/flutter/packages/flutter/lib/
+flutter_driver
+3.7
+file:///opt/flutter/packages/flutter_driver/
+file:///opt/flutter/packages/flutter_driver/lib/
 flutter_test
 3.7
 file:///opt/flutter/packages/flutter_test/
@@ -222,4 +238,12 @@ flutter_web_plugins
 3.7
 file:///opt/flutter/packages/flutter_web_plugins/
 file:///opt/flutter/packages/flutter_web_plugins/lib/
+fuchsia_remote_debug_protocol
+3.7
+file:///opt/flutter/packages/fuchsia_remote_debug_protocol/
+file:///opt/flutter/packages/fuchsia_remote_debug_protocol/lib/
+integration_test
+3.7
+file:///opt/flutter/packages/integration_test/
+file:///opt/flutter/packages/integration_test/lib/
 2

@@ -1,0 +1,4 @@
+{
+    "command": "flutter pub get",
+    "working_directory": "/home/kavia/workspace/code-generation/height-and-weight-matchmaker-220206-220215/preference_frontend"
+}

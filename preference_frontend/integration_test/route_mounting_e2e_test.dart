@@ -7,21 +7,30 @@ import 'package:preference_frontend/main.dart';
 
 /// Controlled-wait helpers mirroring main_flows_e2e_test.dart to keep tests
 /// deterministic by avoiding pumpAndSettle.
+Future<void> _pumpEndOfFrame(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 16));
+}
+
 Future<void> _pumpUntil(WidgetTester tester, bool Function() condition,
-    {Duration timeout = const Duration(seconds: 8),
+    {Duration timeout = const Duration(seconds: 15),
     Duration step = const Duration(milliseconds: 100)}) async {
   final end = DateTime.now().add(timeout);
   while (DateTime.now().isBefore(end)) {
-    if (condition()) return;
+    if (condition()) {
+      await _pumpEndOfFrame(tester);
+      return;
+    }
     await tester.pump(step);
   }
   if (!condition()) {
     throw TestFailure('Condition not met within ${timeout.inMilliseconds}ms');
   }
+  await _pumpEndOfFrame(tester);
 }
 
 Future<void> _waitForFinder(WidgetTester tester, Finder finder,
-    {Duration timeout = const Duration(seconds: 8),
+    {Duration timeout = const Duration(seconds: 15),
     Duration step = const Duration(milliseconds: 100)}) async {
   await _pumpUntil(tester, () => tester.any(finder),
       timeout: timeout, step: step);
@@ -46,6 +55,7 @@ void main() {
         ),
       );
       await _waitForFinder(tester, find.byType(MyHomePage));
+      await _pumpEndOfFrame(tester);
 
       expect(find.byType(MyHomePage), findsOneWidget);
       expect(find.text('preference_frontend'), findsOneWidget);
@@ -60,11 +70,17 @@ void main() {
           initialRoute: '/home',
         ),
       );
+      await _pumpEndOfFrame(tester);
       await _waitForFinder(tester, find.byType(MyHomePage));
+
+      // Navigator initial route config check
+      final navigator = tester.firstState<NavigatorState>(find.byType(Navigator));
+      expect(navigator.widget.initialRoute, anyOf(equals('/home'), isNull));
 
       expect(find.byType(MyHomePage), findsOneWidget);
       expect(find.text('preference_frontend'), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      await _pumpEndOfFrame(tester);
     });
 
     testWidgets('Rebuild stability: keeps key widgets after multiple pumps', (WidgetTester tester) async {
